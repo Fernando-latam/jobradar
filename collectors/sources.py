@@ -4,6 +4,7 @@ Coletores. Cada função retorna uma lista de dicionários no formato padrão:
 Nenhuma delas levanta exceção: em caso de erro, registra e devolve lista vazia.
 """
 import json
+import re
 import time
 import urllib.request
 import urllib.error
@@ -34,23 +35,39 @@ def _get(url, as_json=True):
     return json.loads(raw) if as_json else raw
 
 
-def _clean(html):
-    """Remove tags HTML de forma simples, sem dependências externas."""
-    if not html:
+def _clean(html_text):
+    """
+    Remove HTML de forma robusta.
+    Precisa decodificar entidades ANTES de tirar as tags, senão conteúdo
+    que veio escapado (&lt;div&gt;) sobrevive e aparece cru no relatório.
+    Roda duas vezes porque algumas APIs escapam em dois níveis.
+    """
+    if not html_text:
         return ""
-    out, depth = [], 0
-    for ch in html:
-        if ch == "<":
-            depth += 1
-        elif ch == ">":
-            depth = max(0, depth - 1)
-        elif depth == 0:
-            out.append(ch)
-    text = "".join(out)
-    for a, b in [("&amp;", "&"), ("&nbsp;", " "), ("&#39;", "'"),
-                 ("&quot;", '"'), ("&lt;", "<"), ("&gt;", ">")]:
-        text = text.replace(a, b)
+
+    text = html_text
+    for _ in range(2):
+        # 1. decodificar entidades
+        text = _unescape(text)
+        # 2. remover tags
+        text = re.sub(r"<script[^>]*>.*?</script>", " ", text,
+                      flags=re.S | re.I)
+        text = re.sub(r"<style[^>]*>.*?</style>", " ", text,
+                      flags=re.S | re.I)
+        text = re.sub(r"<[^>]+>", " ", text)
+
+    text = _unescape(text)
     return " ".join(text.split())
+
+
+def _unescape(text):
+    for a, b in (("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
+                 ("&quot;", '"'), ("&#39;", "'"), ("&apos;", "'"),
+                 ("&nbsp;", " "), ("&#x27;", "'"), ("&#x2F;", "/"),
+                 ("&rsquo;", "'"), ("&ldquo;", '"'), ("&rdquo;", '"'),
+                 ("&mdash;", "—"), ("&ndash;", "–"), ("&hellip;", "…")):
+        text = text.replace(a, b)
+    return text
 
 
 def _job(title, company, location, url, description, source, posted=None):
@@ -185,6 +202,7 @@ def greenhouse(companies):
 
 def lever(companies):
     jobs, ok, fail = [], 0, []
+    last_err = ""
     for slug in companies:
         try:
             data = _get(f"https://api.lever.co/v0/postings/{slug}?mode=json")
@@ -196,12 +214,16 @@ def lever(companies):
                     (it.get("descriptionPlain") or it.get("description")),
                     "Lever", str(it.get("createdAt", ""))))
             ok += 1
-        except Exception:
+        except Exception as e:
             fail.append(slug)
+            last_err = repr(e)[:70]
         time.sleep(config.POLITE_DELAY)
-    _log("Lever", ok > 0,
-         f"({ok}/{len(companies)} empresas, {len(jobs)} vagas)"
-         + (f" sem resposta: {', '.join(fail[:5])}" if fail else ""))
+    detail = f"({ok}/{len(companies)} empresas, {len(jobs)} vagas)"
+    if fail:
+        detail += f" sem resposta: {', '.join(fail[:4])}"
+        if ok == 0 and last_err:
+            detail += f" | erro: {last_err}"
+    _log("Lever", ok > 0, detail)
     return jobs
 
 
