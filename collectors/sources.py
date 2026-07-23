@@ -1,0 +1,248 @@
+"""
+Coletores. Cada função retorna uma lista de dicionários no formato padrão:
+{title, company, location, url, description, source, posted}
+Nenhuma delas levanta exceção: em caso de erro, registra e devolve lista vazia.
+"""
+import json
+import time
+import urllib.request
+import urllib.error
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+
+import config
+
+UA = "Mozilla/5.0 (compatible; JobRadar/1.0)"
+
+# Registro de diagnóstico preenchido durante a execução
+DIAGNOSTICS = []
+
+
+def _log(source, ok, detail=""):
+    DIAGNOSTICS.append({"source": source, "ok": ok, "detail": detail})
+    mark = "OK  " if ok else "FALHOU"
+    print(f"  [{mark}] {source} {detail}")
+
+
+def _get(url, as_json=True):
+    req = urllib.request.Request(url, headers={
+        "User-Agent": UA,
+        "Accept": "application/json, text/xml, */*",
+    })
+    with urllib.request.urlopen(req, timeout=config.REQUEST_TIMEOUT) as r:
+        raw = r.read()
+    return json.loads(raw) if as_json else raw
+
+
+def _clean(html):
+    """Remove tags HTML de forma simples, sem dependências externas."""
+    if not html:
+        return ""
+    out, depth = [], 0
+    for ch in html:
+        if ch == "<":
+            depth += 1
+        elif ch == ">":
+            depth = max(0, depth - 1)
+        elif depth == 0:
+            out.append(ch)
+    text = "".join(out)
+    for a, b in [("&amp;", "&"), ("&nbsp;", " "), ("&#39;", "'"),
+                 ("&quot;", '"'), ("&lt;", "<"), ("&gt;", ">")]:
+        text = text.replace(a, b)
+    return " ".join(text.split())
+
+
+def _job(title, company, location, url, description, source, posted=None):
+    return {
+        "title": (title or "").strip(),
+        "company": (company or "").strip(),
+        "location": (location or "").strip(),
+        "url": (url or "").strip(),
+        "description": _clean(description)[:6000],
+        "source": source,
+        "posted": posted or "",
+    }
+
+
+# --------------------------------------------------------------------------
+# Boards abertos
+# --------------------------------------------------------------------------
+
+def remoteok():
+    try:
+        data = _get("https://remoteok.com/api")
+        jobs = []
+        for it in data:
+            if not isinstance(it, dict) or "position" not in it:
+                continue
+            jobs.append(_job(
+                it.get("position"), it.get("company"),
+                it.get("location") or "Remote",
+                it.get("url") or it.get("apply_url"),
+                it.get("description"), "RemoteOK", it.get("date", "")))
+        _log("RemoteOK", True, f"({len(jobs)} vagas)")
+        return jobs
+    except Exception as e:
+        _log("RemoteOK", False, repr(e)[:120])
+        return []
+
+
+def remotive():
+    try:
+        data = _get("https://remotive.com/api/remote-jobs?limit=800")
+        jobs = []
+        for it in data.get("jobs", []):
+            jobs.append(_job(
+                it.get("title"), it.get("company_name"),
+                it.get("candidate_required_location") or "Remote",
+                it.get("url"), it.get("description"),
+                "Remotive", it.get("publication_date", "")))
+        _log("Remotive", True, f"({len(jobs)} vagas)")
+        return jobs
+    except Exception as e:
+        _log("Remotive", False, repr(e)[:120])
+        return []
+
+
+def weworkremotely():
+    feeds = [
+        "https://weworkremotely.com/categories/remote-management-and-finance-jobs.rss",
+        "https://weworkremotely.com/categories/remote-customer-support-jobs.rss",
+        "https://weworkremotely.com/categories/remote-marketing-jobs.rss",
+        "https://weworkremotely.com/remote-jobs.rss",
+    ]
+    jobs = []
+    ok_any = False
+    for url in feeds:
+        try:
+            raw = _get(url, as_json=False)
+            root = ET.fromstring(raw)
+            for item in root.iter("item"):
+                def tx(tag):
+                    el = item.find(tag)
+                    return el.text if el is not None and el.text else ""
+                title = tx("title")
+                company = ""
+                if ":" in title:
+                    company, title = title.split(":", 1)
+                jobs.append(_job(title, company, tx("region") or "Remote",
+                                 tx("link"), tx("description"),
+                                 "WeWorkRemotely", tx("pubDate")))
+            ok_any = True
+            time.sleep(config.POLITE_DELAY)
+        except Exception:
+            continue
+    _log("WeWorkRemotely", ok_any, f"({len(jobs)} vagas)")
+    return jobs
+
+
+def himalayas():
+    try:
+        data = _get("https://himalayas.app/jobs/api?limit=500")
+        jobs = []
+        for it in data.get("jobs", []):
+            locs = it.get("locationRestrictions") or []
+            jobs.append(_job(
+                it.get("title"), it.get("companyName"),
+                ", ".join(locs) if locs else "Worldwide",
+                it.get("applicationLink") or it.get("guid"),
+                it.get("description"), "Himalayas",
+                str(it.get("pubDate", ""))))
+        _log("Himalayas", True, f"({len(jobs)} vagas)")
+        return jobs
+    except Exception as e:
+        _log("Himalayas", False, repr(e)[:120])
+        return []
+
+
+# --------------------------------------------------------------------------
+# ATS por empresa
+# --------------------------------------------------------------------------
+
+def greenhouse(companies):
+    jobs, ok, fail = [], 0, []
+    for slug in companies:
+        try:
+            url = (f"https://boards-api.greenhouse.io/v1/boards/{slug}"
+                   f"/jobs?content=true")
+            data = _get(url)
+            for it in data.get("jobs", []):
+                jobs.append(_job(
+                    it.get("title"), slug,
+                    (it.get("location") or {}).get("name", ""),
+                    it.get("absolute_url"), it.get("content"),
+                    "Greenhouse", it.get("updated_at", "")))
+            ok += 1
+        except Exception:
+            fail.append(slug)
+        time.sleep(config.POLITE_DELAY)
+    _log("Greenhouse", ok > 0,
+         f"({ok}/{len(companies)} empresas, {len(jobs)} vagas)"
+         + (f" sem resposta: {', '.join(fail[:5])}" if fail else ""))
+    return jobs
+
+
+def lever(companies):
+    jobs, ok, fail = [], 0, []
+    for slug in companies:
+        try:
+            data = _get(f"https://api.lever.co/v0/postings/{slug}?mode=json")
+            for it in data:
+                cat = it.get("categories") or {}
+                jobs.append(_job(
+                    it.get("text"), slug, cat.get("location", ""),
+                    it.get("hostedUrl"),
+                    (it.get("descriptionPlain") or it.get("description")),
+                    "Lever", str(it.get("createdAt", ""))))
+            ok += 1
+        except Exception:
+            fail.append(slug)
+        time.sleep(config.POLITE_DELAY)
+    _log("Lever", ok > 0,
+         f"({ok}/{len(companies)} empresas, {len(jobs)} vagas)"
+         + (f" sem resposta: {', '.join(fail[:5])}" if fail else ""))
+    return jobs
+
+
+def ashby(companies):
+    jobs, ok, fail = [], 0, []
+    for slug in companies:
+        try:
+            url = ("https://api.ashbyhq.com/posting-api/job-board/"
+                   f"{slug}?includeCompensation=true")
+            data = _get(url)
+            for it in data.get("jobs", []):
+                jobs.append(_job(
+                    it.get("title"), slug, it.get("location", ""),
+                    it.get("jobUrl"), it.get("descriptionPlain", ""),
+                    "Ashby", it.get("publishedAt", "")))
+            ok += 1
+        except Exception:
+            fail.append(slug)
+        time.sleep(config.POLITE_DELAY)
+    _log("Ashby", ok > 0,
+         f"({ok}/{len(companies)} empresas, {len(jobs)} vagas)"
+         + (f" sem resposta: {', '.join(fail[:5])}" if fail else ""))
+    return jobs
+
+
+def collect_all():
+    print("\nColetando vagas...\n")
+    jobs = []
+    if config.USE_REMOTEOK:
+        jobs += remoteok()
+    if config.USE_REMOTIVE:
+        jobs += remotive()
+    if config.USE_WWR:
+        jobs += weworkremotely()
+    if config.USE_HIMALAYAS:
+        jobs += himalayas()
+    if config.GREENHOUSE_COMPANIES:
+        jobs += greenhouse(config.GREENHOUSE_COMPANIES)
+    if config.LEVER_COMPANIES:
+        jobs += lever(config.LEVER_COMPANIES)
+    if config.ASHBY_COMPANIES:
+        jobs += ashby(config.ASHBY_COMPANIES)
+    print(f"\nTotal bruto coletado: {len(jobs)} vagas")
+    return jobs
