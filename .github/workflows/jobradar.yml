@@ -1,0 +1,39 @@
+name: JobRadar
+
+on:
+  schedule:
+    - cron: '0 10 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Rodar o JobRadar
+        run: python run.py
+        continue-on-error: true
+
+      - name: Guardar o relatório como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jobradar-report
+          path: output/
+          retention-days: 30
+
+      - name: Publicar no GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./output
+          keep_files: false
