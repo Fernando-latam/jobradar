@@ -13,15 +13,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Baixar o código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Preparar Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
       - name: Rodar o JobRadar
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          YAHOO_EMAIL: ${{ secrets.YAHOO_EMAIL }}
+          YAHOO_APP_PASSWORD: ${{ secrets.YAHOO_APP_PASSWORD }}
+          PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: python run.py
+        continue-on-error: true
+
+      - name: Guardar histórico de vagas já enviadas
+        run: |
+          if [ -f seen_jobs.json ]; then
+            git config user.name "github-actions"
+            git config user.email "actions@github.com"
+            git add seen_jobs.json
+            git diff --staged --quiet || git commit -m "Atualiza histórico de vagas"
+            git push
+          fi
         continue-on-error: true
 
       - name: Guardar o relatório como artifact
