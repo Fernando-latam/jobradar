@@ -30,8 +30,10 @@ TITLE_KEYWORDS = [
     "training consultant", "corporate trainer",
 
     # Enablement / Customer Education
-    "enablement", "sales enablement", "customer enablement",
-    "revenue enablement", "partner enablement", "technical enablement",
+    # Nota: "sales enablement" e "revenue enablement" NÃO entram —
+    # são funções de vendas, fora do background do perfil.
+    "enablement", "customer enablement",
+    "partner enablement", "technical enablement",
     "customer education", "customer training", "product education",
     "education specialist", "education manager", "education program",
     "onboarding specialist", "onboarding manager",
@@ -64,6 +66,10 @@ TITLE_EXCLUDE = [
     "recruiter", "talent acquisition", "nurse", "driver",
     "account executive", "sales representative", "sales development",
     "customer support", "customer service representative",
+    # Enablement de vendas: função comercial, não de aprendizagem
+    "sales enablement", "revenue enablement", "gtm enablement",
+    "go-to-market enablement", "bdr enablement", "sdr enablement",
+    "sales trainer", "sales training manager",
 ]
 
 
@@ -218,21 +224,45 @@ LATAM_COUNTRIES = [
 # Sinais REAIS de contratação global.
 # Precisam ser frases inequívocas: palavras soltas como "worldwide" ou
 # "global" aparecem em texto institucional de qualquer empresa.
+# Sinais de contratação global — divididos em dois níveis de confiança.
+
+# NÍVEL 1: só valem se aparecerem no campo LOCALIZAÇÃO.
+# Frases como "globally distributed" e "anywhere in the world" aparecem
+# constantemente em texto institucional ("we're a globally distributed
+# team") e não dizem nada sobre onde a empresa contrata. Na localização,
+# significam o que dizem.
+GEO_POSITIVE_LOCATION = [
+    "worldwide", "anywhere", "global", "remote - global",
+    "any location", "any country", "international",
+    "emea", "americas", "apac",
+]
+
+# NÍVEL 2: valem em qualquer lugar do texto, porque falam explicitamente
+# sobre CONTRATAÇÃO, não sobre cultura da empresa.
 GEO_POSITIVE = [
-    "work from anywhere", "hire from anywhere", "hire anywhere",
-    "we hire globally", "hire globally", "globally distributed",
-    "anywhere in the world", "from anywhere in the world",
-    "remote - worldwide", "remote worldwide", "remote (worldwide)",
-    "remote - global", "remote global", "remote (global)",
-    "fully distributed", "100% remote worldwide",
-    "any location", "any timezone", "all timezones", "any country",
-    "employer of record", "employer-of-record",
+    "we hire globally", "hire globally", "hire from anywhere",
+    "hire anywhere", "we hire in any country",
+    "employer of record", "employer-of-record", " eor ",
     "independent contractor", "b2b contract", "contractor agreement",
     "no location restrictions", "location independent",
     "open to candidates worldwide", "candidates from any country",
+    "work from any country", "eligible to work anywhere",
+    "we are able to hire in", "we can hire in",
 ]
 
 GEO_BRAZIL = ["brazil", "brasil"]
+
+# Frases que só valem quando aparecem no campo LOCALIZAÇÃO.
+# É onde a empresa declara de fato onde a vaga está aberta.
+# Não podem ser buscadas no corpo do texto: "globally distributed team" e
+# "we hire people anywhere in the world" aparecem na descrição de cultura
+# de empresas que na prática só contratam nos EUA.
+GEO_POSITIVE_LOCATION_ONLY = [
+    "worldwide", "anywhere", "global", "globally",
+    "any location", "any country", "all timezones", "any timezone",
+    "international", "multiple countries", "emea", "americas",
+]
+
 GEO_LATAM_OPEN = ["latam", "latin america", "south america"]
 
 
@@ -307,8 +337,10 @@ GREENHOUSE_COMPANIES = [
 
 # Lever — slug de https://jobs.lever.co/SLUG
 LEVER_COMPANIES = [
-    "plaid", "sardine", "kraken", "gopuff", "veeva",
-    "leapsome", "showpad", "seismic", "highspot",
+    # EdTech / LMS — verificados
+    "docebo", "360learning",
+    # Outros
+    "plaid", "kraken", "gopuff", "veeva", "highspot",
 ]
 
 # Ashby — slug de https://jobs.ashbyhq.com/SLUG
@@ -320,10 +352,11 @@ ASHBY_COMPANIES = [
 
 # Workable — slug de https://apply.workable.com/SLUG
 # Muito usado por EdTech e empresas médias europeias.
+# Os que falharam na execução anterior foram removidos ou movidos para o
+# ATS correto. Docebo e 360Learning usam Lever, não Workable.
 WORKABLE_COMPANIES = [
-    "docebo", "360learning", "easygenerator", "learnworlds",
-    "talentlms", "kahoot", "sanalabs", "howspace",
-    "valamis", "cornerstone", "gomolearning",
+    "learnworlds", "kahoot", "howspace", "valamis",
+    "gomolearning", "epam", "brainscape",
 ]
 
 # Recruitee — slug de https://SLUG.recruitee.com

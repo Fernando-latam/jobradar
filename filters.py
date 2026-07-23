@@ -113,15 +113,19 @@ def geo_verdict(job):
     brazil_in_blob = any(t in blob for t in config.GEO_BRAZIL)
 
     # ---- 0. Idioma --------------------------------------------------------
-    # Vem antes de tudo: não adianta a vaga ser elegível se você não fala
-    # o idioma exigido.
     lang_bad, lang_reason = language_blocked(job)
     if lang_bad:
         return "blocked", lang_reason
 
+    # ---- 0b. Localização declaradamente aberta -----------------------------
+    # "Anywhere in the World", "Remote - Worldwide": a empresa declarou no
+    # campo de localização que a vaga não tem restrição. Evidência forte,
+    # avaliada antes de qualquer outra coisa.
+    for term in getattr(config, "GEO_POSITIVE_LOCATION_ONLY", []):
+        if term in loc:
+            return "open", f"localização aberta: {job['location']}"
+
     # ---- 1. Localização travada -------------------------------------------
-    # Nenhum país bloqueia por padrão. GEO_COUNTRY_LOCK está vazio; se você
-    # adicionar países lá, eles voltam a bloquear.
     country_review = None
     if not brazil_in_loc:
         for country in config.GEO_COUNTRY_LOCK:
@@ -154,7 +158,10 @@ def geo_verdict(job):
         if term in loc:
             return "open", f"localização LATAM: {job['location']}"
 
-    # ---- 6. Frase inequívoca de contratação global -------------------------
+    # ---- 6. Sinal de contratação global no texto ---------------------------
+    # Só frases que falam sobre CONTRATAÇÃO. Frases sobre cultura da empresa
+    # ("globally distributed team") ficam de fora de propósito: aparecem em
+    # vagas US-only e geravam falso positivo.
     for term in config.GEO_POSITIVE:
         if term in blob:
             return "open", f"contratação global: '{term}'"
@@ -303,7 +310,27 @@ def score(job):
         if sig in t:
             total += 12
 
-    return min(total, 100), hits
+    # Penalidade: vaga com forte orientação comercial.
+    # Enablement de vendas exige background de quota, pipeline e ciclo de
+    # venda — fora do perfil. Não bloqueia, mas desce no ranking.
+    sales_hits = sum(1 for s in SALES_CONTEXT if s in blob)
+    if sales_hits >= 3:
+        total -= 25
+    elif sales_hits == 2:
+        total -= 12
+
+    return max(min(total, 100), 0), hits
+
+
+# Termos que indicam vaga de enablement comercial em vez de aprendizagem
+SALES_CONTEXT = [
+    "quota", "pipeline", "sales cycle", "sales methodology",
+    "meddic", "meddpicc", "challenger sale", "spin selling",
+    "sales playbook", "win rate", "deal desk", "sales kickoff",
+    "arr", "bookings", "sales quota", "closing deals",
+    "prospecting", "cold calling", "sales performance",
+    "account executives", "sales reps", "sdr", "bdr",
+]
 
 
 # --------------------------------------------------------------------------
