@@ -173,6 +173,63 @@ def himalayas():
         return []
 
 
+def workingnomads():
+    """
+    Working Nomads — agregador com filtro nativo por região.
+    Consulta o feed geral e também os recortes LATAM e Brasil.
+    """
+    urls = [
+        "https://www.workingnomads.com/api/exposed_jobs/",
+        "https://www.workingnomads.com/api/exposed_jobs/?category=education",
+        "https://www.workingnomads.com/api/exposed_jobs/?category=hr",
+    ]
+    jobs, ok_any = [], False
+    for url in urls:
+        try:
+            data = _get(url)
+            items = data if isinstance(data, list) else data.get("results", [])
+            for it in items:
+                jobs.append(_job(
+                    it.get("title"), it.get("company_name") or it.get("company"),
+                    it.get("location") or "Remote",
+                    it.get("url") or it.get("apply_url"),
+                    it.get("description"), "WorkingNomads",
+                    str(it.get("pub_date", ""))))
+            ok_any = True
+        except Exception:
+            pass
+        time.sleep(config.POLITE_DELAY)
+    _log("WorkingNomads", ok_any, f"({len(jobs)} vagas)")
+    return jobs
+
+
+def jobicy():
+    """Jobicy — API pública com filtro por região geográfica."""
+    urls = [
+        "https://jobicy.com/api/v2/remote-jobs?count=100",
+        "https://jobicy.com/api/v2/remote-jobs?count=50&geo=latam",
+        "https://jobicy.com/api/v2/remote-jobs?count=50&geo=anywhere",
+        "https://jobicy.com/api/v2/remote-jobs?count=50&industry=hr",
+    ]
+    jobs, ok_any = [], False
+    for url in urls:
+        try:
+            data = _get(url)
+            for it in data.get("jobs", []):
+                geo = it.get("jobGeo") or "Remote"
+                jobs.append(_job(
+                    it.get("jobTitle"), it.get("companyName"), geo,
+                    it.get("url"),
+                    it.get("jobDescription") or it.get("jobExcerpt"),
+                    "Jobicy", it.get("pubDate", "")))
+            ok_any = True
+        except Exception:
+            pass
+        time.sleep(config.POLITE_DELAY)
+    _log("Jobicy", ok_any, f"({len(jobs)} vagas)")
+    return jobs
+
+
 # --------------------------------------------------------------------------
 # ATS por empresa
 # --------------------------------------------------------------------------
@@ -249,6 +306,65 @@ def ashby(companies):
     return jobs
 
 
+def workable(companies):
+    """Workable — muito usado por EdTech e empresas médias europeias."""
+    jobs, ok, fail = [], 0, []
+    for slug in companies:
+        try:
+            url = (f"https://apply.workable.com/api/v1/widget/accounts/"
+                   f"{slug}?details=true")
+            data = _get(url)
+            for it in data.get("jobs", []):
+                loc = it.get("location") or {}
+                loc_str = ", ".join(filter(None, [
+                    loc.get("city"), loc.get("region"), loc.get("country")]))
+                if it.get("telecommuting"):
+                    loc_str = f"Remote - {loc_str}" if loc_str else "Remote"
+                jobs.append(_job(
+                    it.get("title"), slug, loc_str,
+                    it.get("url") or it.get("shortlink"),
+                    (it.get("description", "") + " " +
+                     it.get("requirements", "")),
+                    "Workable", it.get("published_on", "")))
+            ok += 1
+        except Exception:
+            fail.append(slug)
+        time.sleep(config.POLITE_DELAY)
+    detail = f"({ok}/{len(companies)} empresas, {len(jobs)} vagas)"
+    if fail:
+        detail += f" sem resposta: {', '.join(fail[:4])}"
+    _log("Workable", ok > 0, detail)
+    return jobs
+
+
+def recruitee(companies):
+    """Recruitee — comum em empresas europeias."""
+    jobs, ok, fail = [], 0, []
+    for slug in companies:
+        try:
+            data = _get(f"https://{slug}.recruitee.com/api/offers/")
+            for it in data.get("offers", []):
+                loc_str = ", ".join(filter(None, [
+                    it.get("city"), it.get("country")]))
+                if it.get("remote"):
+                    loc_str = f"Remote - {loc_str}" if loc_str else "Remote"
+                jobs.append(_job(
+                    it.get("title"), slug, loc_str,
+                    it.get("careers_url") or it.get("url"),
+                    (it.get("description", "") + " " +
+                     it.get("requirements", "")),
+                    "Recruitee", it.get("published_at", "")))
+            ok += 1
+        except Exception:
+            fail.append(slug)
+        time.sleep(config.POLITE_DELAY)
+    detail = f"({ok}/{len(companies)} empresas, {len(jobs)} vagas)"
+    if fail:
+        detail += f" sem resposta: {', '.join(fail[:4])}"
+    _log("Recruitee", ok > 0, detail)
+    return jobs
+
+
 def collect_all():
     print("\nColetando vagas...\n")
     jobs = []
@@ -260,11 +376,19 @@ def collect_all():
         jobs += weworkremotely()
     if config.USE_HIMALAYAS:
         jobs += himalayas()
+    if getattr(config, "USE_WORKINGNOMADS", False):
+        jobs += workingnomads()
+    if getattr(config, "USE_JOBICY", False):
+        jobs += jobicy()
     if config.GREENHOUSE_COMPANIES:
         jobs += greenhouse(config.GREENHOUSE_COMPANIES)
     if config.LEVER_COMPANIES:
         jobs += lever(config.LEVER_COMPANIES)
     if config.ASHBY_COMPANIES:
         jobs += ashby(config.ASHBY_COMPANIES)
+    if getattr(config, "WORKABLE_COMPANIES", None):
+        jobs += workable(config.WORKABLE_COMPANIES)
+    if getattr(config, "RECRUITEE_COMPANIES", None):
+        jobs += recruitee(config.RECRUITEE_COMPANIES)
     print(f"\nTotal bruto coletado: {len(jobs)} vagas")
     return jobs

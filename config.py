@@ -38,7 +38,18 @@ TITLE_KEYWORDS = [
 
     # Change / Adoption
     "change management", "change manager", "change lead",
-    "adoption specialist", "organizational development",
+    "change consultant", "organizational change",
+    "adoption specialist", "adoption manager",
+    "organizational development",
+
+    # Localização / conteúdo multilíngue
+    "localization", "localisation", "content localization",
+    "localization specialist", "localization manager",
+    "translation manager", "multilingual content",
+
+    # Contract / freelance na própria descrição do cargo
+    "learning consultant", "training contractor",
+    "freelance instructional", "contract instructional",
 ]
 
 TITLE_EXCLUDE = [
@@ -83,26 +94,120 @@ GEO_NEGATIVE = [
     "security clearance", "w2 only", "no c2c", "c2c not accepted",
 ]
 
+# Países que BLOQUEIAM pela localização: NENHUM.
+# Qualquer país fora do Brasil é de interesse. O que exclui uma vaga é
+# restrição explícita de residência/visto (GEO_NEGATIVE) ou exigência de
+# um idioma que você não fala (LANGUAGE_BLOCK, abaixo).
 GEO_COUNTRY_LOCK = [
+    # Deixe vazio para não bloquear nenhum país pela localização.
+    # Se quiser voltar a bloquear algum, adicione aqui em minúsculas.
+]
+
+# Países cuja localização manda a vaga para "verificar manualmente".
+# Não bloqueiam — só sinalizam que vale conferir o modelo de contratação.
+GEO_COUNTRY_REVIEW = [
     "united states", "usa", "u.s.", "canada", "united kingdom",
-    "spain", "germany", "france", "portugal", "poland", "netherlands",
-    "ireland", "switzerland", "australia", "india", "philippines",
+    "australia", "new zealand", "india", "philippines", "japan",
+    "singapore", "china", "korea",
     "mexico", "colombia", "costa rica", "argentina", "chile", "peru",
     "guatemala", "el salvador", "honduras", "nicaragua", "ecuador",
-    "uruguay", "panama", "japan", "singapore", "new zealand",
-    "italy", "sweden", "norway", "denmark", "finland", "belgium",
-    "austria", "czech", "romania", "greece", "israel", "uae", "dubai",
+    "uruguay", "panama", "bolivia", "paraguay", "dominican republic",
+    "spain", "germany", "france", "portugal", "poland", "netherlands",
+    "ireland", "switzerland", "italy", "sweden", "norway", "denmark",
+    "finland", "belgium", "austria", "czech", "romania", "greece",
+    "estonia", "lithuania", "bulgaria", "hungary",
+    "israel", "uae", "dubai", "south africa", "turkey",
 ]
 
-# Marcadores de localização US — pegam "Remote - US", "Austin, TX", etc.
+
+# ---------------------------------------------------------------------------
+# 2b. IDIOMA  ← o que realmente bloqueia agora
+# Você fala Português, Inglês e Espanhol. Vaga que exige outro idioma
+# como requisito é bloqueada.
+# ---------------------------------------------------------------------------
+
+# Frases que indicam EXIGÊNCIA de idioma que você não domina
+LANGUAGE_BLOCK = [
+    # Alemão
+    "german language", "fluent in german", "fluency in german",
+    "native german", "german speaking", "deutschkenntnisse",
+    "sehr gute deutschkenntnisse", "verhandlungssicheres deutsch",
+    "german is required", "german required", "german c1", "german c2",
+    # Francês
+    "french language", "fluent in french", "fluency in french",
+    "native french", "french speaking", "maîtrise du français",
+    "french is required", "french required", "french c1", "french c2",
+    # Holandês
+    "dutch language", "fluent in dutch", "native dutch",
+    "dutch speaking", "nederlands", "dutch is required",
+    # Nórdicos
+    "swedish language", "fluent in swedish", "native swedish",
+    "norwegian language", "fluent in norwegian",
+    "danish language", "fluent in danish",
+    "finnish language", "fluent in finnish",
+    # Italiano
+    "italian language", "fluent in italian", "native italian",
+    "italian is required", "madrelingua italiana",
+    # Eslavos / outros
+    "polish language", "fluent in polish", "native polish",
+    "czech language", "fluent in czech",
+    "romanian language", "fluent in romanian",
+    "hungarian language", "fluent in hungarian",
+    "russian language", "fluent in russian", "native russian",
+    "ukrainian language", "fluent in ukrainian",
+    "greek language", "fluent in greek",
+    "turkish language", "fluent in turkish",
+    "hebrew language", "fluent in hebrew",
+    "arabic language", "fluent in arabic", "native arabic",
+    # Asiáticos
+    "japanese language", "fluent in japanese", "native japanese",
+    "business level japanese", "japanese is required",
+    "mandarin", "cantonese", "fluent in chinese", "native chinese",
+    "korean language", "fluent in korean", "native korean",
+    "hindi language", "fluent in hindi",
+    "tagalog", "thai language", "vietnamese language",
+]
+
+# Sinais de que a vaga é escrita em idioma que você não domina.
+# Aparecem no TÍTULO — indicam vaga local não-anglófona.
+FOREIGN_TITLE_MARKERS = [
+    # alemão
+    "mitarbeiter", "mitarbeiterin", "referent", "referentin",
+    "berater", "beraterin", "leiter", "leiterin", "fachkraft",
+    "mediengestalter", "ausbildung", "bildungs", "schulung",
+    "trainer/in", " für ", " und ", "m/w/d", "w/m/d",
+    # francês
+    "chargé", "chargée", "responsable", "formateur", "formatrice",
+    "concepteur", "conceptrice", "ingénieur",
+    # holandês
+    "medewerker", "adviseur", "opleider",
+    # italiano
+    "responsabile", "progettista", "formatore",
+    # polonês
+    "specjalista", "kierownik", "trener",
+]
+
+
+# Marcadores de localização US.
+# Não bloqueiam mais — servem para mandar a vaga a "verificar manualmente".
 US_LOCATION_MARKERS = [
     "remote - us", "remote-us", "remote, us", "us remote", "usa remote",
-    "remote (us", "remote us", "- us", ", us", "united states", "u.s.",
-    ", ny", ", ca", ", tx", ", fl", ", wa", ", ma", ", il", ", co",
-    ", ga", ", nc", ", va", ", az", ", oh", ", pa", ", mn", ", or",
-    ", nj", ", ut", ", tn", ", mo", ", md", ", wi", ", in", ", sc",
+    "remote (us", "remote us", "united states", "u.s.",
 ]
 
+# Abreviações de estados — só valem no FIM da string ("Austin, TX")
+US_STATE_SUFFIXES = [
+    "ny", "ca", "tx", "fl", "wa", "ma", "il", "co", "ga", "nc", "va",
+    "az", "oh", "pa", "mn", "or", "nj", "ut", "tn", "mo", "md", "wi",
+    "in", "sc", "mi", "nv", "ks", "ia", "ct", "ok", "ar", "ms", "ne",
+    "id", "nm", "wv", "nh", "me", "ri", "mt", "de", "sd", "nd", "ak",
+    "vt", "wy", "hi", "dc", "ky", "al", "la",
+]
+
+# Lista fechada de países LATAM numa vaga.
+# Se 3 ou mais aparecem e o Brasil NÃO está entre eles, é uma lista de
+# elegibilidade que exclui você de propósito (ex.: a vaga da Viva Talent).
+# Com 2 ou menos, pode ser menção casual — vai para revisão manual.
 LATAM_COUNTRIES = [
     "mexico", "guatemala", "el salvador", "honduras", "nicaragua",
     "costa rica", "panama", "colombia", "ecuador", "peru", "bolivia",
@@ -150,6 +255,16 @@ BR_CITIES = [
     "barueri", "osasco", "santos", "goiânia", "goiania",
 ]
 
+# Você aceita part-time e trabalho por projeto — esses termos são um
+# BÔNUS no score, não um filtro de exclusão.
+PROJECT_WORK_SIGNALS = [
+    "part-time", "part time", "freelance", "freelancer",
+    "contract", "contractor", "fractional", "project-based",
+    "project based", "consultant", "consulting", "interim",
+    "temporary", "fixed-term", "retainer", "hourly",
+    "6-month", "12-month", "3-month", "short-term engagement",
+]
+
 STRONG_CURRENCY_SIGNALS = [
     "usd", "us$", "$/hr", "$ per hour", "usd/hour", "paid in usd",
     "eur", "gbp", "day rate", "daily rate", "hourly rate",
@@ -165,39 +280,64 @@ USE_REMOTEOK = True
 USE_REMOTIVE = True
 USE_WWR = True
 USE_HIMALAYAS = True
+USE_WORKINGNOMADS = True   # tem filtro nativo por LATAM e por Brasil
+USE_JOBICY = True          # agregador com filtro de região
 
 # Greenhouse — slug de https://boards.greenhouse.io/SLUG
+# Priorizadas empresas com função de Customer Education / Enablement forte,
+# EdTech, e consultorias de aprendizagem — onde vagas de L&D realmente saem.
 GREENHOUSE_COMPANIES = [
-    # SaaS com Customer Education / Enablement forte
+    # SaaS com Customer Education / Enablement
     "twilio", "cloudflare", "datadog", "elastic", "mongodb",
     "gitlab", "hubspot", "asana", "airtable", "figma",
-    "gusto", "webflow", "zapier", "samsara", "affirm",
+    "gusto", "webflow", "samsara", "affirm", "stripe",
     "instacart", "doordash", "robinhood", "reddit", "discord",
+    "atlassian", "databricks", "snowflake", "confluent", "hashicorp",
+    "amplitude", "mixpanel", "segment", "braze", "klaviyo",
+    "zendesk", "intercom", "front", "miro", "canva",
+    "okta", "auth0", "1password", "sentry", "postman",
     # EdTech / Learning
-    "coursera", "udemy", "duolingo", "pluralsight", "guild",
-    "articulate", "360learning", "docebo",
+    "coursera", "udemy", "duolingo", "guild", "multiverse",
+    "newsela", "nearpod", "quizlet", "chegg", "skillshare",
     # Remote-first / EOR
-    "oysterhr", "andela", "toptal",
+    "oysterhr", "andela", "turing", "crossover",
     # LATAM
-    "nubank", "wellhub",
+    "nubank", "wellhub", "rappi", "kavak",
 ]
 
 # Lever — slug de https://jobs.lever.co/SLUG
 LEVER_COMPANIES = [
-    "plaid", "benchling", "attentive", "matterport",
-    "voiceflow", "sardine", "kraken", "gopuff",
+    "plaid", "sardine", "kraken", "gopuff", "veeva",
+    "leapsome", "showpad", "seismic", "highspot",
 ]
 
 # Ashby — slug de https://jobs.ashbyhq.com/SLUG
 ASHBY_COMPANIES = [
     "linear", "posthog", "supabase", "clerk",
-    "ramp", "deel", "mercury", "vanta",
+    "ramp", "deel", "mercury", "vanta", "openai",
+    "notion", "loom", "runway", "replit",
+]
+
+# Workable — slug de https://apply.workable.com/SLUG
+# Muito usado por EdTech e empresas médias europeias.
+WORKABLE_COMPANIES = [
+    "docebo", "360learning", "easygenerator", "learnworlds",
+    "talentlms", "kahoot", "sanalabs", "howspace",
+    "valamis", "cornerstone", "gomolearning",
+]
+
+# Recruitee — slug de https://SLUG.recruitee.com
+RECRUITEE_COMPANIES = [
+    "lepaya", "studytube", "gp-strategies",
 ]
 
 
 # ---------------------------------------------------------------------------
 # 5. SAÍDA
 # ---------------------------------------------------------------------------
+# Bloquear vagas que exigem idioma que você não domina?
+BLOCK_BY_LANGUAGE = True
+
 OUTPUT_DIR = "output"
 MAX_AGE_DAYS = 21
 REQUEST_TIMEOUT = 25

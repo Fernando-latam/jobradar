@@ -50,11 +50,42 @@ def match_title(job):
 # Filtro 2 — elegibilidade geográfica
 # --------------------------------------------------------------------------
 def _location_is_us(loc):
-    """Detecta localização travada nos EUA, inclusive abreviações."""
+    """
+    Detecta localização travada nos EUA.
+    Estados de 2 letras só contam no fim da string ("Austin, TX"), senão
+    ", co" bloquearia Colombia e ", ma" bloquearia Malaysia.
+    """
     for marker in config.US_LOCATION_MARKERS:
         if marker in loc:
             return True
+    # "cidade, XX" ou "cidade, XX (remote)"
+    m = re.search(r",\s*([a-z]{2})\b\s*(\(.*\))?\s*$", loc)
+    if m and m.group(1) in config.US_STATE_SUFFIXES:
+        return True
     return False
+
+
+def language_blocked(job):
+    """
+    Retorna (True, motivo) se a vaga exige idioma que você não domina.
+    Você fala Português, Inglês e Espanhol — o resto bloqueia.
+    """
+    if not getattr(config, "BLOCK_BY_LANGUAGE", True):
+        return False, ""
+
+    blob = _norm(job["title"] + " " + job["description"])
+    for term in config.LANGUAGE_BLOCK:
+        if term in blob:
+            idioma = term.split()[-1] if " " in term else term
+            return True, f"exige idioma: {term}"
+
+    # Título escrito em idioma estrangeiro = vaga local não-anglófona
+    t = _norm(job["title"])
+    for marker in config.FOREIGN_TITLE_MARKERS:
+        if marker in t:
+            return True, f"vaga em idioma estrangeiro ('{marker.strip()}')"
+
+    return False, ""
 
 
 def geo_verdict(job):
@@ -81,24 +112,37 @@ def geo_verdict(job):
     brazil_in_loc = any(t in loc for t in config.GEO_BRAZIL)
     brazil_in_blob = any(t in blob for t in config.GEO_BRAZIL)
 
+    # ---- 0. Idioma --------------------------------------------------------
+    # Vem antes de tudo: não adianta a vaga ser elegível se você não fala
+    # o idioma exigido.
+    lang_bad, lang_reason = language_blocked(job)
+    if lang_bad:
+        return "blocked", lang_reason
+
     # ---- 1. Localização travada -------------------------------------------
-    # Esta checagem vem PRIMEIRO. É a correção do bug em que uma vaga
-    # "Remote - US" era liberada porque o texto continha "worldwide".
+    # Nenhum país bloqueia por padrão. GEO_COUNTRY_LOCK está vazio; se você
+    # adicionar países lá, eles voltam a bloquear.
+    country_review = None
     if not brazil_in_loc:
-        if _location_is_us(loc):
-            return "blocked", f"localização US: {job['location']}"
         for country in config.GEO_COUNTRY_LOCK:
             if country in loc:
                 return "blocked", f"localização restrita: {job['location']}"
+        for country in config.GEO_COUNTRY_REVIEW:
+            if country in loc:
+                country_review = country
+                break
+        if not country_review and _location_is_us(loc):
+            country_review = "estados unidos"
 
     # ---- 2. Restrição explícita na descrição ------------------------------
     for term in config.GEO_NEGATIVE:
         if term in blob:
             return "blocked", f"restrição: '{term}'"
 
-    # ---- 3. Lista LATAM sem o Brasil --------------------------------------
+    # ---- 3. Lista LATAM fechada sem o Brasil -------------------------------
+    # 3+ países nomeados sem o Brasil = lista de elegibilidade que exclui você
     latam_named = [c for c in config.LATAM_COUNTRIES if c in blob]
-    if len(latam_named) >= 2 and not brazil_in_blob:
+    if len(latam_named) >= 3 and not brazil_in_blob:
         return "blocked", f"lista LATAM sem Brasil ({', '.join(latam_named[:3])})"
 
     # ---- 4. Brasil citado --------------------------------------------------
@@ -114,6 +158,10 @@ def geo_verdict(job):
     for term in config.GEO_POSITIVE:
         if term in blob:
             return "open", f"contratação global: '{term}'"
+
+    # ---- 7. País que pede verificação --------------------------------------
+    if country_review:
+        return "maybe", f"sediada em {job['location']} — verificar se aceita contractor"
 
     return "maybe", "sem sinal claro — verificar manualmente"
 
@@ -158,19 +206,31 @@ def pay_verdict(job):
 # Pontuação heurística
 # --------------------------------------------------------------------------
 PROFILE_SIGNALS = {
+    # Ferramentas de autoria
     "articulate": 10, "storyline": 8, "articulate rise": 8, "scorm": 6,
+    "camtasia": 5, "captivate": 4, "easygenerator": 7,
+    # Design instrucional
     "instructional design": 10, "learning design": 10,
     "curriculum": 5, "elearning": 6, "e-learning": 6,
     "adult learning": 5, "learning experience": 6,
+    # Enablement / educação de cliente
     "enablement": 8, "customer education": 9, "onboarding": 5,
-    "change management": 7, "adoption": 4,
+    "partner enablement": 8, "product training": 6,
+    # Change management
+    "change management": 8, "adoption": 4, "stakeholder": 3,
+    # IA aplicada
     "generative ai": 7, "artificial intelligence": 5,
-    "chatgpt": 5, "synthesia": 6, "ai-assisted": 7,
+    "chatgpt": 5, "synthesia": 6, "ai-assisted": 7, "ai-powered": 6,
+    # Plataformas
     "lms": 6, "successfactors": 7, "cornerstone": 7, "degreed": 7,
+    "docebo": 5, "moodle": 4,
+    # Dados
     "power bi": 6, "learning analytics": 6, "dashboard": 3,
-    "spanish": 8, "portuguese": 9, "multilingual": 7,
-    "bilingual": 6, "localization": 7, "latam": 7,
-    "camtasia": 5, "captivate": 4,
+    "power automate": 6,
+    # Idiomas — seu maior diferencial
+    "spanish": 8, "portuguese": 9, "multilingual": 8,
+    "bilingual": 6, "trilingual": 9, "localization": 8,
+    "latam": 7, "latin america": 7, "translation": 5,
 }
 
 # "rise" sozinho dá falso positivo ("rise to the challenge"), então
@@ -178,6 +238,38 @@ PROFILE_SIGNALS = {
 CONTEXT_SIGNALS = {
     "rise": ("articulate", "storyline", "elearning", "authoring"),
     "ai": ("tool", "assisted", "content", "generative", "leverage"),
+}
+
+
+def gaps(job):
+    """
+    Identifica requisitos que o perfil não cobre.
+    Não bloqueia nada — só sinaliza no relatório, para você saber antes
+    de abrir a vaga.
+    """
+    blob = _norm(job["title"] + " " + job["description"])
+    found = []
+    for termo, rotulo in GAP_SIGNALS.items():
+        if termo in blob:
+            found.append(rotulo)
+    return sorted(set(found))
+
+
+GAP_SIGNALS = {
+    "xapi": "xAPI",
+    "x-api": "xAPI",
+    "tin can": "xAPI",
+    "adobe captivate": "Captivate",
+    "lectora": "Lectora",
+    "vyond": "Vyond",
+    "after effects": "After Effects",
+    "wcag": "WCAG/acessibilidade",
+    "section 508": "WCAG/acessibilidade",
+    "javascript": "JavaScript",
+    "html/css": "HTML/CSS",
+    "workday learning": "Workday Learning",
+    "docebo": "Docebo",
+    "security clearance": "clearance",
 }
 
 
@@ -196,9 +288,18 @@ def score(job):
                 total += 4
                 hits.append(sig)
 
+    # Bônus: trabalho por projeto / part-time / contractor.
+    # Você aceita esses formatos, e eles são o caminho mais provável
+    # para contratação internacional.
+    for sig in getattr(config, "PROJECT_WORK_SIGNALS", []):
+        if sig in blob:
+            total += 6
+            hits.append(sig)
+            break
+
     t = _norm(job["title"])
     for sig in ("instructional design", "learning design", "enablement",
-                "customer education", "learning experience"):
+                "customer education", "learning experience", "localization"):
         if sig in t:
             total += 12
 
@@ -217,7 +318,7 @@ def run(jobs):
     jobs = [j for j in jobs if match_title(j)]
     stats["match_titulo"] = len(jobs)
 
-    priority, local, maybe, blocked = [], [], [], 0
+    priority, local, maybe, blocked_jobs = [], [], [], []
 
     for j in jobs:
         geo, geo_reason = geo_verdict(j)
@@ -225,12 +326,17 @@ def run(jobs):
         pay, pay_reason = pay_verdict(j)
         j["pay_status"], j["pay_reason"] = pay, pay_reason
         j["score"], j["signals"] = score(j)
+        j["gaps"] = gaps(j)
 
         if geo == "blocked":
-            blocked += 1
+            blocked_jobs.append(j)
         elif geo == "open" and pay == "local":
+            # Elegível, mas provável folha em reais
             local.append(j)
         elif geo == "open":
+            # "foreign" ou "unknown": vaga internacional elegível.
+            # "unknown" é o caso mais comum — a maioria das vagas não
+            # declara moeda. Entra na prioridade mesmo assim.
             priority.append(j)
         else:
             maybe.append(j)
@@ -238,7 +344,19 @@ def run(jobs):
     stats["prioridade"] = len(priority)
     stats["local"] = len(local)
     stats["talvez"] = len(maybe)
-    stats["bloqueadas"] = blocked
+    stats["bloqueadas"] = len(blocked_jobs)
+
+    # Contagem de motivos de bloqueio — mostra se o filtro está exagerando
+    motivos = {}
+    for j in blocked_jobs:
+        chave = j["geo_reason"].split(":")[0].strip()
+        motivos[chave] = motivos.get(chave, 0) + 1
+    stats["motivos_bloqueio"] = sorted(
+        motivos.items(), key=lambda x: x[1], reverse=True)
+
+    # Bloqueadas com score alto: candidatas a falso positivo
+    blocked_jobs.sort(key=lambda x: x["score"], reverse=True)
+    stats["bloqueadas_relevantes"] = blocked_jobs[:8]
 
     for bucket in (priority, local, maybe):
         bucket.sort(key=lambda x: x["score"], reverse=True)

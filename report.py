@@ -30,6 +30,7 @@ h2{font-size:17px;margin:34px 0 6px;padding-bottom:8px;border-bottom:2px solid #
 .tag.geo{background:#e6f4ea;color:#1b5e20}
 .tag.warn{background:#fdf3e0;color:#8a5a00}
 .tag.pay{background:#e8eefc;color:#1c3f80}
+.tag.gap{background:#fdeaea;color:#8a2222}
 .score{float:right;font-size:12px;font-weight:700;color:#2e7d32}
 .snip{font-size:13px;color:#444;border-top:1px solid #eef0f2;padding-top:8px;margin-top:4px}
 .diag{background:#fff;border:1px solid #e2e4e8;border-radius:10px;padding:14px 18px;font-size:13px}
@@ -52,12 +53,17 @@ def _card(j, style=""):
     elif j.get("pay_status") == "foreign":
         pay_tag = f'<span class="tag pay">{e(j["pay_reason"])}</span>'
 
+    gap_tag = ""
+    if j.get("gaps"):
+        gap_tag = ('<span class="tag gap">pede: '
+                   + e(", ".join(j["gaps"][:3])) + "</span>")
+
     return f"""
     <div class="job {style}">
       <span class="score">{j['score']}</span>
       <div class="jt"><a href="{e(j['url'])}" target="_blank">{e(j['title'])}</a></div>
       <div class="jm">{e(j['company'])} &middot; {e(j['location'] or 'Remote')} &middot; {e(j['source'])}</div>
-      <div class="tags">{geo_tag}{pay_tag}{tags}</div>
+      <div class="tags">{geo_tag}{pay_tag}{gap_tag}{tags}</div>
       <div class="snip">{e(j['description'][:280])}...</div>
     </div>"""
 
@@ -78,6 +84,15 @@ def build(priority, local, maybe, stats, diagnostics):
         f'{"✓" if d["ok"] else "✗"} {html.escape(d["source"])} '
         f'{html.escape(d["detail"])}</div>'
         for d in diagnostics)
+
+    motivos_rows = "".join(
+        f'<div><b>{qtd}</b> &middot; {html.escape(motivo)}</div>'
+        for motivo, qtd in stats.get("motivos_bloqueio", [])
+    ) or "<div>Nenhuma vaga bloqueada.</div>"
+
+    blocked_cards = "".join(
+        _card(j) for j in stats.get("bloqueadas_relevantes", [])
+    ) or "<p>Nada a auditar hoje.</p>"
 
     body = f"""<!doctype html><html lang="pt-BR"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -108,6 +123,16 @@ def build(priority, local, maybe, stats, diagnostics):
           "Elegível, mas provavelmente folha local em reais. Fora do objetivo "
           "de ganhar em moeda estrangeira — mantido apenas para visibilidade.",
           local, "loc", 10)}
+
+<h2>Auditoria — por que {stats['bloqueadas']} vagas foram bloqueadas</h2>
+<div class="hint">Confira se algum motivo está bloqueando mais do que deveria.
+Se sim, ajuste as listas correspondentes em <code>config.py</code>.</div>
+<div class="diag">{motivos_rows}</div>
+
+<h2>Bloqueadas com maior aderência ao seu perfil</h2>
+<div class="hint">Vagas descartadas que tiveram score alto. Se alguma delas na
+verdade servia, o motivo indicado mostra qual regra ajustar.</div>
+{blocked_cards}
 
 <h2>Diagnóstico das fontes</h2>
 <div class="diag">{diag_rows}</div>
