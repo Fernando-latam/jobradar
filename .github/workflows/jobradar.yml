@@ -2,7 +2,9 @@ name: JobRadar
 
 on:
   schedule:
-    - cron: '23 10 * * 1-5'
+    # 09:00 UTC = 06:00 Brasília. Horário de menor fila no GitHub Actions,
+    # tende a ser mais pontual que os horários "cheios" de pico.
+    - cron: '0 9 * * 1-5'
   workflow_dispatch:
 
 permissions:
@@ -25,6 +27,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           YAHOO_EMAIL: ${{ secrets.YAHOO_EMAIL }}
           YAHOO_APP_PASSWORD: ${{ secrets.YAHOO_APP_PASSWORD }}
+          ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
           PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: python run.py
         continue-on-error: true
@@ -34,8 +38,8 @@ jobs:
           if [ -f seen_jobs.json ]; then
             git config user.name "github-actions"
             git config user.email "actions@github.com"
-            git add seen_jobs.json
-            git diff --staged --quiet || git commit -m "Atualiza histórico de vagas"
+            git add seen_jobs.json adzuna_state.json 2>/dev/null || true
+            git diff --staged --quiet || git commit -m "Atualiza histórico"
             git push
           fi
         continue-on-error: true
