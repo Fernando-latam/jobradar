@@ -52,15 +52,23 @@ def match_title(job):
 def _location_is_us(loc):
     """
     Detecta localização travada nos EUA.
-    Estados de 2 letras só contam no fim da string ("Austin, TX"), senão
-    ", co" bloquearia Colombia e ", ma" bloquearia Malaysia.
+    Cobre três casos:
+      1. marcadores diretos ("Remote - US", "United States")
+      2. "cidade, XX" no fim ("Austin, TX")
+      3. QUALQUER abreviação de estado US como token isolado na string
+         ("Remote, Oakland CA, Orlando FL, Chicago IL, Austin TX")
     """
     for marker in config.US_LOCATION_MARKERS:
         if marker in loc:
             return True
-    # "cidade, XX" ou "cidade, XX (remote)"
+    # "cidade, XX" no fim
     m = re.search(r",\s*([a-z]{2})\b\s*(\(.*\))?\s*$", loc)
     if m and m.group(1) in config.US_STATE_SUFFIXES:
+        return True
+    # abreviações de estado como token isolado em qualquer posição
+    tokens = re.findall(r"\b([a-z]{2})\b", loc)
+    us_hits = [t for t in tokens if t in config.US_STATE_SUFFIXES]
+    if len(us_hits) >= 2:      # 2+ siglas de estado = lista de escritórios US
         return True
     return False
 
@@ -166,9 +174,14 @@ def geo_verdict(job):
         if term in blob:
             return "open", f"contratação global: '{term}'"
 
-    # ---- 7. País que pede verificação --------------------------------------
+    # ---- 7. País/estado que pede verificação -------------------------------
+    # Política escolhida: mostrar como elegível e verificar caso a caso.
+    # Uma vaga "Austin, TX" ou "Remote - US" sem dizer "US only" explícito
+    # pode aceitar contractor internacional — melhor ver do que perder.
+    # As restrições explícitas (autorização de trabalho, "US only") já
+    # foram capturadas no passo 2 e bloqueadas.
     if country_review:
-        return "maybe", f"sediada em {job['location']} — verificar se aceita contractor"
+        return "open", f"sediada em {job['location']} — confirmar contratação"
 
     return "maybe", "sem sinal claro — verificar manualmente"
 
@@ -182,31 +195,60 @@ def pay_verdict(job):
       "foreign" -> provável pagamento em moeda forte
       "local"   -> provável contratação local no Brasil (folha em reais)
       "unknown" -> não deu para determinar
+
+    Regra central (pedido do Fernando): vaga sediada no Brasil só interessa
+    se pagar em moeda forte. O que decide não é a localização, é o tipo de
+    contratação. Descrição em inglês com sinais de USD/contractor supera a
+    localização brasileira.
     """
     loc = _norm(job["location"])
     desc = _norm(job["description"])
     blob = f"{loc} {desc}"
 
-    # Sinais explícitos de contratação local
+    tem_sinal_forte = any(s in blob for s in config.STRONG_CURRENCY_SIGNALS)
+    desc_em_ingles = _looks_english(job["description"])
+
+    # Sinais explícitos de contratação local (CLT, benefícios em português)
     for term in config.LOCAL_HIRE_SIGNALS:
         if term in blob:
             return "local", f"contratação local: '{term}'"
 
-    # Cidade brasileira na localização, sem sinal de contrato internacional
+    # Cidade brasileira na localização
     city_hit = next((c for c in config.BR_CITIES if c in loc), None)
-    if city_hit:
-        has_intl = any(s in blob for s in
-                       ("employer of record", "independent contractor",
-                        "usd", "b2b", "contractor agreement"))
-        if not has_intl:
-            return "local", f"vaga sediada em {job['location']}"
+    brasil_na_loc = city_hit or any(t in loc for t in config.GEO_BRAZIL)
+    if brasil_na_loc:
+        # Descrição em inglês + sinal de moeda forte = vaga internacional
+        # apenas sediada/anunciada no Brasil. Interessa.
+        if tem_sinal_forte or desc_em_ingles:
+            return "foreign", "sediada no BR mas descrição/contrato internacional"
+        # Português, sem sinal de moeda forte = folha local. Não interessa.
+        return "local", f"vaga local em {job['location'] or 'Brasil'}"
 
-    # Sinais de moeda forte / contrato
-    for term in config.STRONG_CURRENCY_SIGNALS:
-        if term in blob:
-            return "foreign", f"sinal de moeda/contrato: '{term}'"
+    # Fora do Brasil: sinal de moeda forte confirma
+    if tem_sinal_forte:
+        termo = next(s for s in config.STRONG_CURRENCY_SIGNALS if s in blob)
+        return "foreign", f"sinal de moeda/contrato: '{termo}'"
 
     return "unknown", "moeda não identificada"
+
+
+# Palavras funcionais comuns em inglês, raras em português.
+_ENGLISH_MARKERS = (" the ", " and ", " you ", " will ", " with ", " for ",
+                    " our ", " your ", " we ", " to ", " of ", " a ",
+                    "experience", "requirements", "responsibilities",
+                    "skills", "team", "remote", "work")
+_PORTUGUESE_MARKERS = (" e ", " ou ", " você ", " com ", " para ", " nossa ",
+                       " seu ", " sua ", " de ", " da ", " do ", " que ",
+                       "experiência", "requisitos", "responsabilidades",
+                       "habilidades", "equipe", "vaga", "trabalho")
+
+
+def _looks_english(text):
+    """Heurística leve: mais marcadores de inglês que de português."""
+    t = f" {(text or '').lower()} "
+    en = sum(1 for m in _ENGLISH_MARKERS if m in t)
+    pt = sum(1 for m in _PORTUGUESE_MARKERS if m in t)
+    return en > pt and en >= 3
 
 
 # --------------------------------------------------------------------------
@@ -318,6 +360,17 @@ def score(job):
         total -= 25
     elif sales_hits == 2:
         total -= 12
+
+    # Bônus de elegibilidade: vagas com abertura confirmada sobem acima das
+    # que apenas "precisam confirmar" (localização US sem restrição explícita).
+    geo = job.get("geo_status")
+    reason = job.get("geo_reason", "")
+    if geo == "open":
+        if "Brasil" in reason or "LATAM" in reason or "aberta" in reason:
+            total += 15          # abertura forte
+        elif "global" in reason:
+            total += 12
+        # "confirmar contratação" não recebe bônus — fica abaixo
 
     return max(min(total, 100), 0), hits
 
