@@ -250,7 +250,7 @@ GEO_POSITIVE = [
     "we are able to hire in", "we can hire in",
 ]
 
-GEO_BRAZIL = ["brazil", "brasil"]
+GEO_BRAZIL = ["brazil", "brasil", ", br", "- br", "(br)", "brazilian"]
 
 # Frases que só valem quando aparecem no campo LOCALIZAÇÃO.
 # É onde a empresa declara de fato onde a vaga está aberta.
@@ -312,6 +312,18 @@ USE_WWR = True
 USE_HIMALAYAS = True
 USE_WORKINGNOMADS = True   # tem filtro nativo por LATAM e por Brasil
 USE_JOBICY = True          # agregador com filtro de região
+USE_ARBEITNOW = True       # multi-ATS, foco em contratação internacional/visto
+USE_ADZUNA = True          # busca por palavra-chave em vários países (precisa de app_id + app_key)
+
+# Países do Adzuna a varrer. NÃO é sobre Brasil — é sobre vaga que pague em
+# moeda forte, venha de onde vier. México incluído (caso real do Fernando).
+# Adzuna disponíveis: us gb ca mx de fr nl be at pl sg in au nz za br
+ADZUNA_COUNTRIES = ["us", "gb", "ca", "mx", "de", "nl", "sg", "in", "au", "br"]
+
+# Dias em que o Adzuna roda (0=seg ... 6=dom). Limitado para respeitar a
+# cota de 1.000 chamadas/mês do free tier. 10 países x 6 termos x 12 dias/mês
+# = ~720/mês. As demais fontes rodam todos os dias.
+ADZUNA_WEEKDAYS = [0, 2, 4]
 
 # Greenhouse — slug de https://boards.greenhouse.io/SLUG
 # Priorizadas empresas com função de Customer Education / Enablement forte,
@@ -333,6 +345,15 @@ GREENHOUSE_COMPANIES = [
     "oysterhr", "andela", "turing", "crossover",
     # LATAM
     "nubank", "wellhub", "rappi", "kavak",
+    # Segurança / SaaS que contratam ID no Brasil (trazidas pelo Fernando)
+    "knowbe4", "cogstate", "fictiv",
+    # Mais SaaS com Customer Education / L&D
+    "gitlab", "hashicorp", "grafanalabs", "vercel", "retool",
+    "airbyte", "dbtlabs", "hex", "census", "fivetran",
+    "pigment", "personio", "pleo", "payfit", "spendesk",
+    "contentful", "storyblok", "sanity", "algolia", "typeform",
+    "pipedrive", "hotjar", "productboard", "aircall", "gong",
+    "chorusai", "clari", "outreach", "salesloft", "lattice",
 ]
 
 # Lever — slug de https://jobs.lever.co/SLUG
