@@ -4,10 +4,12 @@ Coletores. Cada função retorna uma lista de dicionários no formato padrão:
 Nenhuma delas levanta exceção: em caso de erro, registra e devolve lista vazia.
 """
 import json
+import os
 import re
 import time
 import urllib.request
 import urllib.error
+import urllib.parse
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
@@ -86,6 +88,120 @@ def _job(title, company, location, url, description, source, posted=None):
 # Boards abertos
 # --------------------------------------------------------------------------
 
+def arbeitnow():
+    """
+    Arbeitnow — agregador que puxa de múltiplos ATS, com paginação.
+    Foco em empregadores que contratam internacional e patrocinam visto.
+    Sem chave.
+    """
+    jobs, ok_any = [], False
+    base = "https://www.arbeitnow.com/api/job-board-api"
+    try:
+        url = base
+        for _ in range(5):  # até 5 páginas
+            data = _get(url)
+            for it in data.get("data", []):
+                tags = it.get("tags") or []
+                loc = it.get("location") or ""
+                if it.get("remote"):
+                    loc = f"Remote - {loc}" if loc else "Remote"
+                jobs.append(_job(
+                    it.get("title"), it.get("company_name"), loc,
+                    it.get("url"), it.get("description"),
+                    "Arbeitnow", str(it.get("created_at", ""))))
+            nxt = (data.get("links") or {}).get("next")
+            if not nxt:
+                break
+            url = nxt
+            time.sleep(config.POLITE_DELAY)
+        ok_any = True
+    except Exception as e:
+        _log("Arbeitnow", False, repr(e)[:120])
+        return []
+    _log("Arbeitnow", ok_any, f"({len(jobs)} vagas)")
+    return jobs
+
+
+def adzuna():
+    """
+    Adzuna — busca por palavra-chave em múltiplos países.
+
+    O Adzuna não tem endpoint global: a URL exige um país. Por isso varremos
+    vários países de uma vez, cobrindo os hubs de trabalho remoto
+    internacional. O objetivo NÃO é Brasil — é vaga que pague em moeda forte,
+    venha de onde vier (o último remoto do Fernando foi de empresa mexicana).
+
+    O Brasil entra só para capturar vagas postadas aqui que sejam para o
+    exterior; o filtro de moeda depois separa as que pagam em real.
+
+    Cota: free tier são 1.000 chamadas/mês. Este coletor faz
+    len(countries) x len(queries) por execução. Para caber, rode o Adzuna
+    algumas vezes por semana (ver ADZUNA_MAX_RUNS_HINT no README), não todo
+    dia — as outras fontes seguem diárias.
+    """
+    app_id = os.environ.get("ADZUNA_APP_ID")
+    app_key = os.environ.get("ADZUNA_APP_KEY")
+    if not app_id or not app_key:
+        _log("Adzuna", False, "sem ADZUNA_APP_ID / ADZUNA_APP_KEY — pulado")
+        return []
+
+    # Controle de cota: roda só em dias definidos (padrão seg/qua/sex),
+    # porque varrer 10 países x 6 termos todo dia estouraria os 1.000/mês
+    # do free tier. As outras fontes seguem diárias.
+    dias_permitidos = getattr(config, "ADZUNA_WEEKDAYS", [0, 2, 4])
+    hoje = datetime.now().weekday()  # 0 = segunda
+    if hoje not in dias_permitidos:
+        _log("Adzuna", True,
+             f"(pulado hoje — roda nos dias {dias_permitidos} p/ economizar cota)")
+        return []
+
+    queries = [
+        "instructional designer",
+        "learning experience designer",
+        "customer education",
+        "enablement manager",
+        "learning designer",
+        "localization specialist",
+    ]
+    # Hubs de trabalho remoto internacional. México incluído (caso real).
+    # Brasil incluído só para pegar vaga postada aqui que seja para fora.
+    countries = getattr(config, "ADZUNA_COUNTRIES",
+                        ["us", "gb", "ca", "mx", "de", "nl", "sg", "in",
+                         "au", "br"])
+
+    jobs, ok_any, cota = [], False, 0
+    for country in countries:
+        for what in queries:
+            try:
+                params = urllib.parse.urlencode({
+                    "app_id": app_id,
+                    "app_key": app_key,
+                    "results_per_page": 40,
+                    "what": what,
+                    "max_days_old": 21,
+                    "content-type": "application/json",
+                })
+                url = (f"https://api.adzuna.com/v1/api/jobs/{country}"
+                       f"/search/1?{params}")
+                data = _get(url)
+                cota += 1
+                for it in data.get("results", []):
+                    loc = (it.get("location") or {}).get("display_name", "")
+                    company = (it.get("company") or {}).get("display_name", "")
+                    jobs.append(_job(
+                        it.get("title"), company, loc,
+                        it.get("redirect_url"), it.get("description"),
+                        f"Adzuna-{country.upper()}",
+                        str(it.get("created", ""))))
+                ok_any = True
+            except Exception:
+                pass
+            time.sleep(config.POLITE_DELAY)
+    _log("Adzuna", ok_any,
+         f"({len(jobs)} vagas, {cota} chamadas de cota em {len(countries)} países)")
+    return jobs
+
+
 def remoteok():
     try:
         data = _get("https://remoteok.com/api")
@@ -127,6 +243,8 @@ def weworkremotely():
         "https://weworkremotely.com/categories/remote-management-and-finance-jobs.rss",
         "https://weworkremotely.com/categories/remote-customer-support-jobs.rss",
         "https://weworkremotely.com/categories/remote-marketing-jobs.rss",
+        "https://weworkremotely.com/categories/remote-design-jobs.rss",
+        "https://weworkremotely.com/categories/remote-product-jobs.rss",
         "https://weworkremotely.com/remote-jobs.rss",
     ]
     jobs = []
@@ -182,6 +300,8 @@ def workingnomads():
         "https://www.workingnomads.com/api/exposed_jobs/",
         "https://www.workingnomads.com/api/exposed_jobs/?category=education",
         "https://www.workingnomads.com/api/exposed_jobs/?category=hr",
+        "https://www.workingnomads.com/api/exposed_jobs/?category=design",
+        "https://www.workingnomads.com/api/exposed_jobs/?category=management",
     ]
     jobs, ok_any = [], False
     for url in urls:
@@ -210,6 +330,9 @@ def jobicy():
         "https://jobicy.com/api/v2/remote-jobs?count=50&geo=latam",
         "https://jobicy.com/api/v2/remote-jobs?count=50&geo=anywhere",
         "https://jobicy.com/api/v2/remote-jobs?count=50&industry=hr",
+        "https://jobicy.com/api/v2/remote-jobs?count=50&industry=education",
+        "https://jobicy.com/api/v2/remote-jobs?count=50&industry=design-multimedia",
+        "https://jobicy.com/api/v2/remote-jobs?count=50&tag=instructional-design",
     ]
     jobs, ok_any = [], False
     for url in urls:
@@ -368,6 +491,8 @@ def recruitee(companies):
 def collect_all():
     print("\nColetando vagas...\n")
     jobs = []
+    if getattr(config, "USE_ADZUNA", False):
+        jobs += adzuna()
     if config.USE_REMOTEOK:
         jobs += remoteok()
     if config.USE_REMOTIVE:
@@ -380,6 +505,8 @@ def collect_all():
         jobs += workingnomads()
     if getattr(config, "USE_JOBICY", False):
         jobs += jobicy()
+    if getattr(config, "USE_ARBEITNOW", False):
+        jobs += arbeitnow()
     if config.GREENHOUSE_COMPANIES:
         jobs += greenhouse(config.GREENHOUSE_COMPANIES)
     if config.LEVER_COMPANIES:
