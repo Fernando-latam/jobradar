@@ -90,7 +90,7 @@ if usou_ia:
     mailer.enviar(destaques, outras, stats, PAGES_URL)
 
     # ---- registrar o que foi enviado ---------------------------------------
-    historico = history.registrar(destaques + outras, historico)
+    
     history.salvar(historico)
 
     print("\nTop do dia:")
