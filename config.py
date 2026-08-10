@@ -313,6 +313,7 @@ USE_HIMALAYAS = True
 USE_WORKINGNOMADS = True   # tem filtro nativo por LATAM e por Brasil
 USE_JOBICY = True          # agregador com filtro de região
 USE_ARBEITNOW = True       # multi-ATS, foco em contratação internacional/visto
+USE_JOBSPRESSO = True      # feed RSS, filtra por palavra-chave na origem
 USE_ADZUNA = True          # busca por palavra-chave em vários países (precisa de app_id + app_key)
 
 # Países do Adzuna a varrer. NÃO é sobre Brasil — é sobre vaga que pague em
