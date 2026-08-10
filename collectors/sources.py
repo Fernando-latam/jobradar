@@ -487,7 +487,40 @@ def recruitee(companies):
     _log("Recruitee", ok > 0, detail)
     return jobs
 
-
+def jobspresso():
+    """
+    Jobspresso — feed RSS (WordPress Job Manager).
+    Aceita busca por palavra-chave na URL. Focamos nos termos da área
+    para reduzir ruído já na origem.
+    """
+    termos = ["instructional", "learning", "enablement",
+              "curriculum", "training", "education"]
+    jobs, ok_any = [], False
+    for kw in termos:
+        try:
+            url = (f"https://jobspresso.co/feed/?post_type=job_listing"
+                   f"&search_keywords={urllib.parse.quote(kw)}")
+            raw = _get(url, as_json=False)
+            root = ET.fromstring(raw)
+            for item in root.iter("item"):
+                def tx(tag):
+                    el = item.find(tag)
+                    return el.text if el is not None and el.text else ""
+                title = tx("title")
+                company = ""
+                # Jobspresso põe empresa no title às vezes: "Cargo at Empresa"
+                if " at " in title:
+                    title, company = title.rsplit(" at ", 1)
+                jobs.append(_job(
+                    title, company, "Remote",
+                    tx("link"), tx("description"),
+                    "Jobspresso", tx("pubDate")))
+            ok_any = True
+        except Exception:
+            pass
+        time.sleep(config.POLITE_DELAY)
+    _log("Jobspresso", ok_any, f"({len(jobs)} vagas)")
+    return jobs
 def collect_all():
     print("\nColetando vagas...\n")
     jobs = []
@@ -507,6 +540,9 @@ def collect_all():
         jobs += jobicy()
     if getattr(config, "USE_ARBEITNOW", False):
         jobs += arbeitnow()
+    if getattr(config, "USE_JOBSPRESSO", False):
+        jobs += jobspresso()
+    
     if config.GREENHOUSE_COMPANIES:
         jobs += greenhouse(config.GREENHOUSE_COMPANIES)
     if config.LEVER_COMPANIES:
