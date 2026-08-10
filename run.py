@@ -59,7 +59,7 @@ def main():
     ordenadas = sorted(novas, key=lambda j: j.get("score", 0), reverse=True)
     ordenadas, usou_ia = ai_scoring.evaluate(ordenadas)
 
-    if usou_ia:
+if usou_ia:
         ordenadas = ai_scoring.rank(ordenadas)
         # descarta o que o Claude classificou como inviável
         viaveis = [j for j in ordenadas
@@ -69,6 +69,14 @@ def main():
             print(f"  Claude descartou {descartadas} como inviáveis")
         destaques = [j for j in viaveis if j.get("ai_nota", 0) >= 55][:8]
         outras = [j for j in viaveis if j not in destaques]
+    else:
+        destaques = ordenadas[:8]
+        outras = ordenadas[8:]
+
+    # Registra TODAS as vagas avaliadas no histórico — inclusive as que o
+    # Claude descartou como inviáveis e as que não viraram destaque. Se não,
+    # elas voltam como "novas" amanhã e o email repete.
+    historico = history.registrar(ordenadas, historico)
     else:
         destaques = ordenadas[:8]
         outras = ordenadas[8:]
