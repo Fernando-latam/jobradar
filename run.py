@@ -54,12 +54,11 @@ def main():
     novas, ja_vistas = history.separar_novas(candidatas, historico)
     print(f"\n  Novas desde a última execução: {len(novas)} "
           f"({len(ja_vistas)} já enviadas antes)")
-
     # ---- avaliação com Claude ---------------------------------------------
     ordenadas = sorted(novas, key=lambda j: j.get("score", 0), reverse=True)
     ordenadas, usou_ia = ai_scoring.evaluate(ordenadas)
 
-if usou_ia:
+    if usou_ia:
         ordenadas = ai_scoring.rank(ordenadas)
         # descarta o que o Claude classificou como inviável
         viaveis = [j for j in ordenadas
@@ -72,7 +71,6 @@ if usou_ia:
     else:
         destaques = ordenadas[:8]
         outras = ordenadas[8:]
-
     # Registra TODAS as vagas avaliadas no histórico — inclusive as que o
     # Claude descartou como inviáveis e as que não viraram destaque. Se não,
     # elas voltam como "novas" amanhã e o email repete.
