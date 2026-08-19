@@ -48,9 +48,9 @@ jobs:
           path: output/
           retention-days: 30
 
-    #  - name: Publicar no GitHub Pages
-     #   uses: peaceiris/actions-gh-pages@v4
-      #  with:
-       #   github_token: ${{ secrets.GITHUB_TOKEN }}
-        #  publish_dir: ./output
-         # keep_files: false
+       - name: Publicar no GitHub Pages
+         uses: peaceiris/actions-gh-pages@v4
+         with:
+         github_token: ${{ secrets.GITHUB_TOKEN }}
+         publish_dir: ./output
+         keep_files: false
