@@ -8,7 +8,6 @@ concurrency:
   cancel-in-progress: true
 permissions:
   contents: write
-
 jobs:
   collect:
     runs-on: ubuntu-latest
@@ -16,12 +15,10 @@ jobs:
     steps:
       - name: Baixar o código
         uses: actions/checkout@v5
-
       - name: Preparar Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-
       - name: Restaurar histórico de vagas
         uses: actions/cache@v4
         with:
@@ -29,7 +26,6 @@ jobs:
           key: jobradar-history-${{ github.run_id }}
           restore-keys: |
             jobradar-history-
-
       - name: Rodar o JobRadar
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -40,17 +36,16 @@ jobs:
           PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: python run.py
         continue-on-error: true
-
       - name: Guardar o relatório como artifact
         uses: actions/upload-artifact@v4
         with:
           name: jobradar-report
           path: output/
           retention-days: 30
-
-       - name: Publicar no GitHub Pages
-         uses: peaceiris/actions-gh-pages@v4
-         with:
-         github_token: ${{ secrets.GITHUB_TOKEN }}
-         publish_dir: ./output
-         keep_files: false
+      - name: Publicar no GitHub Pages
+        if: hashFiles('output/**') != ''
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./output
+          keep_files: false
