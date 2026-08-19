@@ -1,8 +1,6 @@
 name: JobRadar
 on:
   schedule:
-    # 09:00 UTC = 06:00 Brasília. Horário de menor fila no GitHub Actions,
-    # tende a ser mais pontual que os horários "cheios" de pico.
     - cron: '0 9 * * 1-5'
   workflow_dispatch:
 concurrency:
@@ -18,10 +16,20 @@ jobs:
     steps:
       - name: Baixar o código
         uses: actions/checkout@v5
+
       - name: Preparar Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+
+      - name: Restaurar histórico de vagas
+        uses: actions/cache@v4
+        with:
+          path: seen_jobs.json
+          key: jobradar-history-${{ github.run_id }}
+          restore-keys: |
+            jobradar-history-
+
       - name: Rodar o JobRadar
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -32,25 +40,14 @@ jobs:
           PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: python run.py
         continue-on-error: true
-      - name: Guardar histórico de vagas já enviadas
-        run: |
-          if [ -f seen_jobs.json ]; then
-            git config user.name "github-actions"
-            git config user.email "actions@github.com"
-            git add seen_jobs.json adzuna_state.json 2>/dev/null || true
-            if ! git diff --staged --quiet; then
-              git commit -m "Atualiza histórico"
-              git pull --rebase --autostash origin main || true
-              git push || echo "push falhou, seguindo sem quebrar"
-            fi
-          fi
-        continue-on-error: true
+
       - name: Guardar o relatório como artifact
         uses: actions/upload-artifact@v4
         with:
           name: jobradar-report
           path: output/
           retention-days: 30
+
       - name: Publicar no GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
